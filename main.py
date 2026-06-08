@@ -1,50 +1,29 @@
-import os
 import sys
-import io
-import time
 import argparse
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-from dotenv import load_dotenv
-from openai import OpenAI
-from openai import RateLimitError, APIStatusError
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
-load_dotenv()
-
-parser = argparse.ArgumentParser(description="OpenRouter Chat REPL")
-parser.add_argument("--model", default="openai/gpt-oss-120b:free")
-parser.add_argument("--temperature", type=float, default=0.7)
-parser.add_argument("--max-tokens", type=int, default=1024)
-parser.add_argument("--system", default="You are a helpful assistant.")
-args = parser.parse_args()
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url="https://openrouter.ai/api/v1",
+from openai_in_py.client import (
+    build_client,
+    chat_with_retry,
+    DEFAULT_MODEL,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_SYSTEM,
 )
 
-MAX_RETRIES = 3
+MAX_HISTORY = 20
 
-def chat_with_retry(messages, temperature, max_tokens):
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = client.chat.completions.create(
-                model=args.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content
-        except (RateLimitError, APIStatusError) as e:
-            if attempt == MAX_RETRIES - 1:
-                raise
-            retry_after = 30
-            if hasattr(e, 'response') and hasattr(e.response, 'headers'):
-                retry_after = int(e.response.headers.get('retry-after', 30))
-            print(f"\nRate limited. Retrying in {retry_after}s... (attempt {attempt + 1}/{MAX_RETRIES})")
-            time.sleep(retry_after)
+parser = argparse.ArgumentParser(description="OpenRouter Chat REPL")
+parser.add_argument("--model", default=DEFAULT_MODEL)
+parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+parser.add_argument("--system", default=DEFAULT_SYSTEM)
+args = parser.parse_args()
 
+client = build_client()
 messages = [{"role": "system", "content": args.system}]
 
 print(f"Model: {args.model}")
@@ -69,8 +48,13 @@ while True:
 
     messages.append({"role": "user", "content": user_input})
 
+    if len(messages) > MAX_HISTORY:
+        messages = [messages[0]] + [messages[-(MAX_HISTORY - 1):]]
+
     try:
-        reply = chat_with_retry(messages, args.temperature, args.max_tokens)
+        reply = chat_with_retry(
+            client, args.model, messages, args.temperature, args.max_tokens
+        )
         print(f"\nAssistant > {reply}\n")
         messages.append({"role": "assistant", "content": reply})
     except Exception as e:

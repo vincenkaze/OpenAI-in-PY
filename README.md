@@ -8,11 +8,14 @@ A Python project for interacting with LLMs via the OpenAI SDK and OpenRouter's f
 
 ```
 OpenAI in Py/
-├── .env                  # API key (not tracked)
+├── .env                      # API key (not tracked)
 ├── .gitignore
 ├── requirements.txt
-├── main.py               # Interactive chat REPL
-└── compare_temps.py      # Temperature comparison tool
+├── main.py                   # Interactive chat REPL
+├── compare_temps.py          # Temperature comparison tool
+└── openai_in_py/
+    ├── __init__.py
+    └── client.py             # Shared client, retry logic, defaults
 ```
 
 ## Prerequisites
@@ -97,8 +100,10 @@ python main.py --system "You are a pirate. Respond only in pirate speak."
 python compare_temps.py "Tell me a joke in one sentence"
 ```
 
+> **Note:** The default model (`gpt-oss-20b`) is a standard chat model that respects temperature. Reasoning models like `gpt-oss-120b` ignore temperature and will produce near-identical outputs across values. Free-tier models can be slow — use `--model` to switch if needed.
+
 ```
-Model: openai/gpt-oss-120b:free
+Model: openai/gpt-oss-20b:free
 Prompt: Tell me a joke in one sentence
 Temperatures: [0.0, 0.7, 1.5, 2.0]
 ============================================================
@@ -125,7 +130,7 @@ Why did the scarecrow win an award? Because he was outstanding in his field.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `prompt` (required) | — | The prompt to send |
-| `--model` | `openai/gpt-oss-120b:free` | OpenRouter model ID |
+| `--model` | `openai/gpt-oss-20b:free` | OpenRouter model ID |
 | `--max-tokens` | `1024` | Max response length |
 | `--system` | `"You are a helpful assistant."` | System message |
 | `--temps` | `0.0 0.7 1.5 2.0` | Space-separated temperature values |
@@ -164,8 +169,25 @@ Full list: [openrouter.ai/models](https://openrouter.ai/models?max_price=0)
 
 1. **OpenAI SDK** — The project uses the official `openai` Python package
 2. **OpenRouter routing** — Requests are sent to OpenRouter's API (`https://openrouter.ai/api/v1`) which routes to the chosen model provider
-3. **Environment variables** — The API key is loaded from `.env` via `python-dotenv`
-4. **Retry logic** — Free models are rate-limited. Both scripts automatically retry up to 3 times with the provider's suggested wait time
+3. **Shared client** — `openai_in_py/client.py` provides `build_client()` and `chat_with_retry()` used by both scripts
+4. **Environment variables** — The API key is loaded from `.env` via `python-dotenv`
+5. **Retry logic** — Free models are rate-limited. Both scripts automatically retry up to 3 times with the provider's suggested wait time
+6. **History capping** — The REPL limits conversation history to 20 messages to avoid token limits
+7. **Request timeout** — 60-second timeout prevents hanging on slow free-tier responses
+
+### Package Architecture
+
+```
+openai_in_py/client.py
+├── build_client()          → OpenAI client configured for OpenRouter
+├── chat_with_retry()       → API call with automatic retry on 429
+├── DEFAULT_MODEL           → "openai/gpt-oss-120b:free"
+├── DEFAULT_TEMPERATURE     → 0.7
+├── DEFAULT_MAX_TOKENS      → 1024
+├── DEFAULT_SYSTEM          → "You are a helpful assistant."
+├── MAX_RETRIES             → 3
+└── REQUEST_TIMEOUT         → 60
+```
 
 ## API Key Safety
 
