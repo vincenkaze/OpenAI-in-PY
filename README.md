@@ -2,6 +2,8 @@
 
 A Python project for interacting with LLMs via the OpenAI SDK and OpenRouter's free models. Includes an interactive REPL chat and a temperature comparison tool.
 
+**Project Reference:** [OpenAI API in Python - roadmap.sh](https://roadmap.sh/projects/openai-api-python)
+
 ## Project Structure
 
 ```
